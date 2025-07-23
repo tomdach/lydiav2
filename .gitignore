@@ -1,0 +1,47 @@
+# Fichiers de configuration locaux
+admin/config.php
+
+# Fichiers de sauvegarde
+*.backup
+*.bak
+*~
+
+# Fichiers temporaires
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Base de données locale (gardez database.sql pour la structure)
+*.db
+*.sqlite
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Dossiers de cache
+cache/
+tmp/
+
+# Fichiers d'environnement
+.env
+.env.local
+
+# Uploads sensibles (gardez README.md)
+uploads/*
+!uploads/README.md
+
+# Fichiers IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node modules si vous en avez
+node_modules/
+
+# Composer vendor
+vendor/
