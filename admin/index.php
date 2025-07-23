@@ -1035,6 +1035,7 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
                     <div class="ml-3 flex-1">
                         <p class="text-sm font-medium text-blue-800">
                             <span id="newMessageText">Nouveau message reçu !</span>
+                            <span id="unreadCountInNotification" class="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-1 font-bold"></span>
                         </p>
                         <p class="text-xs text-blue-600 mt-1">
                             Cliquez pour voir les messages
@@ -3761,11 +3762,8 @@ Cordialement,"></textarea>
                         const newMessages = newCount - lastUnreadCount;
                         console.log('Nouveaux messages détectés:', newMessages);
                         
-                        // Accumuler les nouveaux messages
-                        totalNewMessages += newMessages;
-                        
-                        // Afficher ou mettre à jour la notification
-                        showNewMessageNotification(totalNewMessages);
+                        // Afficher la notification avec le nombre total de messages non lus
+                        showNewMessageNotification(newCount);
                         
                         // Jouer le son de notification
                         if (notificationSound) {
@@ -3855,6 +3853,9 @@ Cordialement,"></textarea>
                 dashboardBadge.style.display = 'none';
             }
             
+            // Mettre à jour la notification de nouveaux messages
+            updateNotificationDisplay(count);
+            
             // Mettre à jour aussi le point clignotant dans le dashboard
             const dashboardCard = dashboardCount ? dashboardCount.closest('.stats-card') : null;
             const pulseIndicator = dashboardCard ? dashboardCard.querySelector('.animate-pulse') : null;
@@ -3872,16 +3873,47 @@ Cordialement,"></textarea>
             }
         }
 
+        // Mettre à jour l'affichage de la notification avec le compteur actuel
+        function updateNotificationDisplay(count) {
+            const notification = document.getElementById('newMessageNotification');
+            const countSpan = document.getElementById('unreadCountInNotification');
+            
+            if (count > 0) {
+                // Afficher le compteur dans la notification
+                if (countSpan) {
+                    countSpan.textContent = count;
+                    countSpan.style.display = 'inline-block';
+                }
+                
+                // Si la notification n'est pas visible et qu'il y a des messages non lus, l'afficher
+                if (notification && notification.classList.contains('hidden')) {
+                    showNewMessageNotification(count);
+                }
+            } else {
+                // Masquer automatiquement la notification quand il n'y a plus de messages non lus
+                if (notification && !notification.classList.contains('hidden')) {
+                    hideNewMessageNotification();
+                }
+            }
+        }
+
         // Afficher la notification de nouveaux messages
         function showNewMessageNotification(totalNew) {
             const notification = document.getElementById('newMessageNotification');
             const messageText = document.getElementById('newMessageText');
+            const countSpan = document.getElementById('unreadCountInNotification');
             
             if (notification && messageText) {
                 // Mettre à jour le texte avec le total accumulé
                 messageText.textContent = totalNew === 1 ? 
                     'Nouveau message reçu !' : 
                     `${totalNew} nouveaux messages reçus !`;
+                
+                // Mettre à jour le compteur
+                if (countSpan) {
+                    countSpan.textContent = totalNew;
+                    countSpan.style.display = 'inline-block';
+                }
                 
                 // Afficher la notification si elle n'est pas déjà visible
                 if (!notificationVisible) {
@@ -3903,14 +3935,21 @@ Cordialement,"></textarea>
             }
         }
 
-        // Masquer la notification (quand l'utilisateur clique)
+        // Masquer la notification (quand l'utilisateur clique ou automatiquement)
         function hideNewMessageNotification() {
             const notification = document.getElementById('newMessageNotification');
+            const countSpan = document.getElementById('unreadCountInNotification');
+            
             if (notification) {
                 notification.classList.add('hidden');
                 notification.classList.remove('animate-bounce', 'animate-pulse');
                 notificationVisible = false;
                 totalNewMessages = 0; // Remettre à zéro le compteur
+                
+                // Masquer aussi le compteur
+                if (countSpan) {
+                    countSpan.style.display = 'none';
+                }
             }
         }
 
