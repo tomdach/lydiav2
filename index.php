@@ -1,4 +1,9 @@
 <?php
+// En-têtes pour empêcher la mise en cache
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 // Inclusion de la configuration
 require_once 'admin/config.php';
 
@@ -120,6 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_form'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title><?= getSetting('site_title', 'Votre Nom | Bilan de Compétences & Avenir Professionnel') ?></title>
     
     <!-- Importation des polices depuis Google Fonts -->
@@ -1713,6 +1721,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_form'])) {
                 });
             }
         });
+    </script>
+    
+    <!-- Version pour empêcher la mise en cache -->
+    <script>
+        // Forcer le rechargement si nécessaire
+        console.log('Version: <?= time() ?>');
     </script>
 </body>
 </html>
