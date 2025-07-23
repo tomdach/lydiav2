@@ -3757,15 +3757,12 @@ Cordialement,"></textarea>
                     // Mettre à jour les compteurs visuels
                     updateUnreadCountDisplay(newCount);
                     
-                    // Vérifier s'il y a de nouveaux messages
+                    // Vérifier s'il y a de nouveaux messages (augmentation)
                     if (newCount > lastUnreadCount) {
                         const newMessages = newCount - lastUnreadCount;
                         console.log('Nouveaux messages détectés:', newMessages);
                         
-                        // Afficher la notification avec le nombre total de messages non lus
-                        showNewMessageNotification(newCount);
-                        
-                        // Jouer le son de notification
+                        // Jouer le son de notification pour les nouveaux messages
                         if (notificationSound) {
                             notificationSound();
                         }
@@ -3779,6 +3776,12 @@ Cordialement,"></textarea>
                         // Synchroniser avec le serveur même si le count a diminué
                         lastUnreadCount = newCount;
                         refreshDashboardMessages();
+                    }
+                    
+                    // TOUJOURS afficher la notification s'il y a des messages non lus
+                    // (pas seulement pour les nouveaux)
+                    if (newCount > 0) {
+                        showNewMessageNotification(newCount);
                     }
                     
                     // Si on est sur la page des messages, actualiser la liste
@@ -3878,6 +3881,8 @@ Cordialement,"></textarea>
             const notification = document.getElementById('newMessageNotification');
             const countSpan = document.getElementById('unreadCountInNotification');
             
+            console.log(`updateNotificationDisplay appelée avec count: ${count}`); // Debug
+            
             if (count > 0) {
                 // Afficher le compteur dans la notification
                 if (countSpan) {
@@ -3885,41 +3890,58 @@ Cordialement,"></textarea>
                     countSpan.style.display = 'inline-block';
                 }
                 
-                // Si la notification n'est pas visible et qu'il y a des messages non lus, l'afficher
+                // Si la notification n'est pas visible et qu'il y a des messages non lus, l'afficher IMMÉDIATEMENT
                 if (notification && notification.classList.contains('hidden')) {
+                    console.log('Affichage immédiat de la notification'); // Debug
                     showNewMessageNotification(count);
+                }
+                // Si elle est déjà visible, juste mettre à jour le compteur
+                else if (notification && !notification.classList.contains('hidden')) {
+                    const messageText = document.getElementById('newMessageText');
+                    if (messageText) {
+                        messageText.textContent = count === 1 ? 
+                            'Vous avez 1 message non lu !' : 
+                            `Vous avez ${count} messages non lus !`;
+                    }
+                    if (countSpan) {
+                        countSpan.textContent = count;
+                    }
                 }
             } else {
                 // Masquer automatiquement la notification quand il n'y a plus de messages non lus
                 if (notification && !notification.classList.contains('hidden')) {
+                    console.log('Masquage automatique de la notification'); // Debug
                     hideNewMessageNotification();
                 }
             }
         }
 
         // Afficher la notification de nouveaux messages
-        function showNewMessageNotification(totalNew) {
+        function showNewMessageNotification(totalUnread) {
             const notification = document.getElementById('newMessageNotification');
             const messageText = document.getElementById('newMessageText');
             const countSpan = document.getElementById('unreadCountInNotification');
             
             if (notification && messageText) {
-                // Mettre à jour le texte avec le total accumulé
-                messageText.textContent = totalNew === 1 ? 
-                    'Nouveau message reçu !' : 
-                    `${totalNew} nouveaux messages reçus !`;
+                // Adapter le message selon le contexte
+                if (totalUnread === 1) {
+                    messageText.textContent = 'Vous avez 1 message non lu !';
+                } else {
+                    messageText.textContent = `Vous avez ${totalUnread} messages non lus !`;
+                }
                 
                 // Mettre à jour le compteur
                 if (countSpan) {
-                    countSpan.textContent = totalNew;
+                    countSpan.textContent = totalUnread;
                     countSpan.style.display = 'inline-block';
                 }
                 
                 // Afficher la notification si elle n'est pas déjà visible
-                if (!notificationVisible) {
+                if (notification.classList.contains('hidden')) {
                     notification.classList.remove('hidden');
                     notification.classList.add('animate-bounce');
                     notificationVisible = true;
+                    console.log(`Notification affichée: ${totalUnread} messages`);
                     
                     // Animation de rebond temporaire
                     setTimeout(() => {
@@ -4075,6 +4097,19 @@ Cordialement,"></textarea>
                 console.log('Impossible de créer le son de notification:', e);
             }
             
+            // Initialiser le compteur avec la valeur PHP du serveur
+            const initialUnreadCount = <?= $unreadCount ?>;
+            lastUnreadCount = initialUnreadCount;
+            
+            // Si il y a des messages non lus au chargement, afficher immédiatement la notification
+            if (initialUnreadCount > 0) {
+                // Ne pas afficher la notification si on est déjà sur la page des messages
+                if (!window.location.href.includes('section=messages')) {
+                    showNewMessageNotification(initialUnreadCount);
+                    console.log(`Notification affichée au chargement: ${initialUnreadCount} messages non lus`);
+                }
+            }
+            
             // Si on est sur la page des messages, masquer la notification
             if (window.location.href.includes('section=messages')) {
                 hideNewMessageNotification();
@@ -4083,8 +4118,8 @@ Cordialement,"></textarea>
             // Démarrer l'auto-refresh
             startAutoRefresh();
             
-            // Première vérification après 5 secondes pour laisser le temps à la page de se charger
-            setTimeout(checkForNewMessages, 5000);
+            // Première vérification immédiate pour synchroniser
+            setTimeout(checkForNewMessages, 1000);
         });
 
         // Arrêter l'actualisation quand on quitte la page
