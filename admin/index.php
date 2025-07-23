@@ -1526,7 +1526,7 @@ Cordialement,"></textarea>
             </div>
 
             <!-- Bouton de sauvegarde flottant (visible seulement dans les sections d'édition) -->
-            <?php if ($currentSection !== 'dashboard' && $currentSection !== 'settings'): ?>
+            <?php if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $currentSection !== 'messages'): ?>
                 <div class="floating-save">
                     <button id="floatingSaveBtn" class="btn btn-primary btn-floating">
                         <i class="fas fa-save mr-2"></i>Sauvegarder les modifications

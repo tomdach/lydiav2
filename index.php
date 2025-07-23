@@ -74,7 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_form'])) {
         // Vérifier format français (10 chiffres commençant par 0, ou +33 suivi de 9 chiffres)
         if (!preg_match('/^(0[1-9][0-9]{8}|(\+33|0033)[1-9][0-9]{8})$/', $cleanPhone)) {
             $phoneValid = false;
-            $contactError = "Le numéro de téléphone doit être un numéro français valide (10 chiffres commençant par 0, ex: 01 23 45 67 89).";
+            $contactError = "Le numéro de téléphone doit être un numéro français valide (10 chiffres commençant par 0, ex: 0123456789 ou 01 23 45 67 89).";
+        } else {
+            // Formater le numéro pour l'enregistrement (avec espaces)
+            if (preg_match('/^0[1-9][0-9]{8}$/', $cleanPhone)) {
+                $phone = substr($cleanPhone, 0, 2) . ' ' . substr($cleanPhone, 2, 2) . ' ' . substr($cleanPhone, 4, 2) . ' ' . substr($cleanPhone, 6, 2) . ' ' . substr($cleanPhone, 8, 2);
+            }
         }
     }
     
@@ -1100,9 +1105,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_form'])) {
                                 <label for="email">Votre Email</label>
                             </div>
                             <div class="form-group">
-                                <input type="tel" id="phone" name="phone" placeholder=" " pattern="^(0[1-9][0-9]{8}|(\+33|0033)[1-9][0-9]{8})$" title="Numéro français valide requis (ex: 01 23 45 67 89)">
+                                <input type="tel" id="phone" name="phone" placeholder=" " title="Numéro français valide (ex: 0123456789 ou 01 23 45 67 89)">
                                 <label for="phone">Numéro de téléphone (optionnel)</label>
-                                <small style="color: #666; font-size: 0.8rem; display: block; margin-top: 5px;">Format attendu : 01 23 45 67 89</small>
+                                <small style="color: #666; font-size: 0.8rem; display: block; margin-top: 5px;">Tapez votre numéro, il sera formaté automatiquement</small>
                             </div>
                         </div>
                         <div class="form-group">
@@ -1356,9 +1361,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_form'])) {
                 const phonePattern = /^(0[1-9][0-9]{8}|(\+33|0033)[1-9][0-9]{8})$/;
                 
                 if (!phonePattern.test(cleanPhone)) {
-                    alert('Le numéro de téléphone doit être un numéro français valide.\nFormat attendu : 01 23 45 67 89 (10 chiffres)');
+                    alert('Le numéro de téléphone doit être un numéro français valide.\nFormat : 10 chiffres commençant par 0 (ex: 0123456789 ou 01 23 45 67 89)');
                     document.getElementById('phone').focus();
                     return false;
+                }
+                
+                // Formater automatiquement le numéro dans le champ
+                if (cleanPhone.match(/^0[1-9][0-9]{8}$/)) {
+                    const formatted = cleanPhone.substring(0, 2) + ' ' + 
+                                    cleanPhone.substring(2, 4) + ' ' + 
+                                    cleanPhone.substring(4, 6) + ' ' + 
+                                    cleanPhone.substring(6, 8) + ' ' + 
+                                    cleanPhone.substring(8, 10);
+                    document.getElementById('phone').value = formatted;
                 }
             }
             
@@ -1660,6 +1675,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_form'])) {
             // Recharger juste la section contact
             location.reload();
         }
+        
+        // Formatage automatique du numéro de téléphone
+        document.addEventListener('DOMContentLoaded', function() {
+            const phoneInput = document.getElementById('phone');
+            if (phoneInput) {
+                phoneInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/[^0-9]/g, ''); // Garder seulement les chiffres
+                    
+                    // Si le numéro commence par 0 et fait exactement 10 chiffres
+                    if (value.length === 10 && value.startsWith('0')) {
+                        // Formater : 01 23 45 67 89
+                        value = value.substring(0, 2) + ' ' + 
+                               value.substring(2, 4) + ' ' + 
+                               value.substring(4, 6) + ' ' + 
+                               value.substring(6, 8) + ' ' + 
+                               value.substring(8, 10);
+                    } else if (value.length === 9 && !value.startsWith('0')) {
+                        // Si 9 chiffres sans 0, ajouter 0 au début et formater
+                        value = '0' + value;
+                        value = value.substring(0, 2) + ' ' + 
+                               value.substring(2, 4) + ' ' + 
+                               value.substring(4, 6) + ' ' + 
+                               value.substring(6, 8) + ' ' + 
+                               value.substring(8, 10);
+                    }
+                    
+                    e.target.value = value;
+                });
+                
+                // Permettre de coller un numéro et le formater automatiquement
+                phoneInput.addEventListener('paste', function(e) {
+                    setTimeout(() => {
+                        const event = new Event('input');
+                        e.target.dispatchEvent(event);
+                    }, 10);
+                });
+            }
+        });
     </script>
 </body>
 </html>
