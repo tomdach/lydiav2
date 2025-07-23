@@ -192,6 +192,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
             
+        case 'delete_multiple_messages':
+            $messageIds = $_POST['message_ids'] ?? [];
+            
+            if (!is_array($messageIds) || empty($messageIds)) {
+                echo json_encode(['success' => false, 'error' => 'Aucun message sélectionné']);
+                exit;
+            }
+            
+            $deleted = 0;
+            $failed = 0;
+            
+            foreach ($messageIds as $messageId) {
+                $messageId = intval($messageId);
+                if ($messageId && deleteMessage($messageId)) {
+                    $deleted++;
+                } else {
+                    $failed++;
+                }
+            }
+            
+            if ($deleted > 0) {
+                $message = $deleted . ' message' . ($deleted > 1 ? 's' : '') . ' supprimé' . ($deleted > 1 ? 's' : '');
+                if ($failed > 0) {
+                    $message .= ' (' . $failed . ' échec' . ($failed > 1 ? 's' : '') . ')';
+                }
+                echo json_encode(['success' => true, 'message' => $message, 'deleted' => $deleted, 'failed' => $failed]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Aucun message n\'a pu être supprimé']);
+            }
+            exit;
+            
+        case 'mark_multiple_read':
+            $messageIds = $_POST['message_ids'] ?? [];
+            
+            if (!is_array($messageIds) || empty($messageIds)) {
+                echo json_encode(['success' => false, 'error' => 'Aucun message sélectionné']);
+                exit;
+            }
+            
+            $marked = 0;
+            $failed = 0;
+            
+            foreach ($messageIds as $messageId) {
+                $messageId = intval($messageId);
+                if ($messageId && markMessageAsRead($messageId)) {
+                    $marked++;
+                } else {
+                    $failed++;
+                }
+            }
+            
+            if ($marked > 0) {
+                $message = $marked . ' message' . ($marked > 1 ? 's' : '') . ' marqué' . ($marked > 1 ? 's' : '') . ' comme lu' . ($marked > 1 ? 's' : '');
+                if ($failed > 0) {
+                    $message .= ' (' . $failed . ' échec' . ($failed > 1 ? 's' : '') . ')';
+                }
+                echo json_encode(['success' => true, 'message' => $message, 'marked' => $marked, 'failed' => $failed]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Aucun message n\'a pu être marqué']);
+            }
+            exit;
+            
         case 'get_messages':
             $messages = getContactMessages();
             $html = '';
@@ -1350,101 +1412,232 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
                 <?php endif; ?>
 
             <?php elseif ($currentSection === 'messages'): ?>
-                <!-- Section Messages -->
-                <div class="mb-6">
-                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
-                        <i class="fas fa-inbox mr-3 text-blue-600"></i>Messages de contact
-                    </h2>
-                    <p class="text-gray-600">Gérez les messages reçus via le formulaire de contact</p>
+                <!-- Section Messages Pro -->
+                <div class="mb-8">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-3xl font-bold text-gray-900 mb-2 flex items-center">
+                                <div class="relative mr-3">
+                                    <i class="fas fa-inbox text-blue-600"></i>
+                                    <?php if ($unreadCount > 0): ?>
+                                        <span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-pulse"><?= $unreadCount ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                Gestion des Messages
+                            </h2>
+                            <p class="text-gray-600">Interface professionnelle de gestion des contacts</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button onclick="refreshMessages()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+                                <i class="fas fa-sync-alt mr-2"></i>Actualiser
+                            </button>
+                            <div class="bg-white border border-gray-200 rounded-lg px-4 py-2 flex items-center space-x-2">
+                                <span class="text-sm text-gray-600">Total:</span>
+                                <span class="font-semibold text-gray-900" id="totalMessagesCount"><?= count($messages) ?></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <?php
                 $messages = getContactMessages();
                 ?>
 
-                <div class="bg-white rounded-lg shadow-md overflow-hidden" id="messagesContainer">
+                <!-- Interface de gestion avancée -->
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden" id="messagesContainer">
+                    <!-- Barre d'outils -->
+                    <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <!-- Sélection multiple -->
+                                <div class="flex items-center">
+                                    <input type="checkbox" id="selectAll" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <label for="selectAll" class="ml-2 text-sm text-gray-700">Tout sélectionner</label>
+                                </div>
+                                
+                                <!-- Actions sur la sélection -->
+                                <div id="bulkActions" class="flex items-center space-x-2 opacity-0 transition-opacity">
+                                    <button onclick="markSelectedAsRead()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm transition-colors flex items-center">
+                                        <i class="fas fa-check mr-1"></i>Marquer lus
+                                    </button>
+                                    <button onclick="deleteSelectedMessages()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors flex items-center">
+                                        <i class="fas fa-trash mr-1"></i>Supprimer
+                                    </button>
+                                    <span id="selectedCount" class="text-sm text-gray-600 ml-2"></span>
+                                </div>
+                            </div>
+                            
+                            <!-- Filtres -->
+                            <div class="flex items-center space-x-3">
+                                <select id="statusFilter" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">Tous les statuts</option>
+                                    <option value="unread">Non lus</option>
+                                    <option value="read">Lus</option>
+                                </select>
+                                <select id="sortBy" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="newest">Plus récent d'abord</option>
+                                    <option value="oldest">Plus ancien d'abord</option>
+                                    <option value="name">Par nom</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <?php if (empty($messages)): ?>
-                        <div class="p-8 text-center">
-                            <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
-                            <h3 class="text-xl font-medium text-gray-500 mb-2">Aucun message</h3>
-                            <p class="text-gray-400">Les messages de contact apparaîtront ici.</p>
+                        <!-- État vide -->
+                        <div class="p-12 text-center">
+                            <div class="max-w-sm mx-auto">
+                                <div class="bg-gray-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                                    <i class="fas fa-inbox text-4xl text-gray-400"></i>
+                                </div>
+                                <h3 class="text-xl font-semibold text-gray-900 mb-2">Aucun message</h3>
+                                <p class="text-gray-500 mb-6">Les messages de contact apparaîtront ici lorsque les visiteurs utilisent le formulaire.</p>
+                                <div class="flex justify-center space-x-3">
+                                    <button onclick="refreshMessages()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+                                        <i class="fas fa-sync-alt mr-2"></i>Actualiser
+                                    </button>
+                                    <a href="#contact" target="_blank" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+                                        <i class="fas fa-external-link-alt mr-2"></i>Voir le formulaire
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     <?php else: ?>
+                        <!-- Liste des messages -->
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Réponses</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            <input type="checkbox" id="headerCheckbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                        </th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Aperçu du message</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Statut</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Réponses</th>
+                                        <th class="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200" id="messagesTableBody">
                                     <?php foreach ($messages as $message): 
                                         $replies = getMessageReplies($message['id']);
                                         $replyCount = count($replies);
+                                        $isUnread = !$message['is_read'];
                                     ?>
-                                        <tr class="<?= $message['is_read'] ? 'bg-white' : 'bg-blue-50' ?> hover:bg-gray-50 transition-colors" data-message-id="<?= $message['id'] ?>">
+                                        <tr class="<?= $isUnread ? 'bg-blue-50 border-l-4 border-blue-400' : 'bg-white' ?> hover:bg-gray-50 transition-all duration-200 group" 
+                                            data-message-id="<?= $message['id'] ?>" 
+                                            data-status="<?= $isUnread ? 'unread' : 'read' ?>"
+                                            data-date="<?= strtotime($message['created_at']) ?>"
+                                            data-name="<?= strtolower($message['firstname'] . ' ' . $message['lastname']) ?>">
+                                            
+                                            <!-- Checkbox -->
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <input type="checkbox" class="message-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500" value="<?= $message['id'] ?>">
+                                            </td>
+                                            
+                                            <!-- Contact -->
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="flex items-center">
-                                                    <div>
-                                                        <div class="text-sm font-medium text-gray-900">
-                                                            <?= htmlspecialchars($message['firstname'] . ' ' . $message['lastname']) ?>
+                                                    <div class="flex-shrink-0 h-10 w-10">
+                                                        <div class="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                                                            <?= strtoupper(substr($message['firstname'], 0, 1) . substr($message['lastname'], 0, 1)) ?>
                                                         </div>
-                                                        <div class="text-sm text-gray-500"><?= htmlspecialchars($message['email']) ?></div>
+                                                    </div>
+                                                    <div class="ml-4">
+                                                        <div class="text-sm font-semibold text-gray-900 flex items-center">
+                                                            <?= htmlspecialchars($message['firstname'] . ' ' . $message['lastname']) ?>
+                                                            <?php if ($isUnread): ?>
+                                                                <span class="ml-2 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <div class="text-sm text-gray-500 flex items-center">
+                                                            <i class="fas fa-envelope mr-1"></i>
+                                                            <?= htmlspecialchars($message['email']) ?>
+                                                        </div>
                                                         <?php if ($message['phone']): ?>
-                                                            <div class="text-sm text-gray-500">
-                                                                <i class="fas fa-phone mr-1"></i><?= htmlspecialchars($message['phone']) ?>
+                                                            <div class="text-sm text-gray-500 flex items-center">
+                                                                <i class="fas fa-phone mr-1"></i>
+                                                                <?= htmlspecialchars($message['phone']) ?>
                                                             </div>
                                                         <?php endif; ?>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="px-6 py-4">
-                                                <div class="text-sm text-gray-900 max-w-xs truncate" title="<?= htmlspecialchars($message['message']) ?>">
-                                                    <?= htmlspecialchars(substr($message['message'], 0, 100)) ?><?= strlen($message['message']) > 100 ? '...' : '' ?>
+                                            
+                                            <!-- Message preview -->
+                                            <td class="px-6 py-4 max-w-xs">
+                                                <div class="text-sm text-gray-900 line-clamp-2 cursor-pointer hover:text-blue-600" 
+                                                     onclick="viewMessage(<?= $message['id'] ?>)" 
+                                                     title="Cliquez pour voir le message complet">
+                                                    <?= htmlspecialchars(substr($message['message'], 0, 120)) ?><?= strlen($message['message']) > 120 ? '...' : '' ?>
+                                                </div>
+                                                <div class="text-xs text-gray-400 mt-1">
+                                                    <?= strlen($message['message']) ?> caractères
                                                 </div>
                                             </td>
+                                            
+                                            <!-- Date -->
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <?= date('d/m/Y H:i', strtotime($message['created_at'])) ?>
+                                                <div class="flex flex-col">
+                                                    <span class="font-medium"><?= date('d/m/Y', strtotime($message['created_at'])) ?></span>
+                                                    <span class="text-xs text-gray-400"><?= date('H:i', strtotime($message['created_at'])) ?></span>
+                                                </div>
                                             </td>
+                                            
+                                            <!-- Statut -->
                                             <td class="px-6 py-4 whitespace-nowrap">
-                                                <?php if ($message['is_read']): ?>
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                        <i class="fas fa-check mr-1"></i>Lu
+                                                <?php if ($isUnread): ?>
+                                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+                                                        <span class="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                                                        Nouveau
                                                     </span>
                                                 <?php else: ?>
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                        <i class="fas fa-circle mr-1"></i>Non lu
+                                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+                                                        <i class="fas fa-check-circle mr-1"></i>
+                                                        Lu
                                                     </span>
                                                 <?php endif; ?>
                                             </td>
+                                            
+                                            <!-- Réponses -->
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <?php if ($replyCount > 0): ?>
-                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                        <i class="fas fa-reply mr-1"></i><?= $replyCount ?> réponse<?= $replyCount > 1 ? 's' : '' ?>
+                                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                                                        <i class="fas fa-reply mr-1"></i>
+                                                        <?= $replyCount ?> réponse<?= $replyCount > 1 ? 's' : '' ?>
                                                     </span>
                                                 <?php else: ?>
-                                                    <span class="text-gray-400 text-xs">
-                                                        <i class="fas fa-minus mr-1"></i>Aucune réponse
+                                                    <span class="text-gray-400 text-xs flex items-center">
+                                                        <i class="fas fa-minus mr-1"></i>
+                                                        Aucune réponse
                                                     </span>
                                                 <?php endif; ?>
                                             </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <button onclick="viewMessage(<?= $message['id'] ?>)" class="text-blue-600 hover:text-blue-900 mr-3">
-                                                    <i class="fas fa-eye"></i> Voir & Répondre
-                                                </button>
-                                                <?php if (!$message['is_read']): ?>
-                                                    <button onclick="markAsRead(<?= $message['id'] ?>)" class="text-green-600 hover:text-green-900 mr-3">
-                                                        <i class="fas fa-check"></i> Marquer lu
+                                            
+                                            <!-- Actions -->
+                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <div class="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onclick="viewMessage(<?= $message['id'] ?>)" 
+                                                            class="text-blue-600 hover:text-blue-900 hover:bg-blue-50 p-2 rounded-lg transition-all"
+                                                            title="Voir et répondre">
+                                                        <i class="fas fa-eye"></i>
                                                     </button>
-                                                <?php endif; ?>
-                                                <button onclick="deleteMessage(<?= $message['id'] ?>)" class="text-red-600 hover:text-red-900">
-                                                    <i class="fas fa-trash"></i> Supprimer
-                                                </button>
+                                                    
+                                                    <?php if ($isUnread): ?>
+                                                        <button onclick="markAsRead(<?= $message['id'] ?>)" 
+                                                                class="text-green-600 hover:text-green-900 hover:bg-green-50 p-2 rounded-lg transition-all"
+                                                                title="Marquer comme lu">
+                                                            <i class="fas fa-check"></i>
+                                                        </button>
+                                                    <?php endif; ?>
+                                                    
+                                                    <button onclick="deleteMessage(<?= $message['id'] ?>)" 
+                                                            class="text-red-600 hover:text-red-900 hover:bg-red-50 p-2 rounded-lg transition-all"
+                                                            title="Supprimer">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -1454,84 +1647,107 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
                     <?php endif; ?>
                 </div>
 
-                <!-- Modal pour voir le message -->
-                <div id="messageModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
-                    <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-                        <div class="flex items-center justify-between p-6 border-b bg-gray-50">
-                            <h3 class="text-xl font-semibold text-gray-900">
-                                <i class="fas fa-envelope-open mr-2 text-blue-600"></i>
-                                Détails du message
-                            </h3>
-                            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl">
-                                <i class="fas fa-times"></i>
+                <!-- Modal améliorée pour voir le message -->
+                <div id="messageModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full mx-4 max-h-[95vh] overflow-hidden transform transition-all">
+                        <!-- En-tête de la modal -->
+                        <div class="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                            <div class="flex items-center">
+                                <div class="bg-white bg-opacity-20 rounded-full p-3 mr-4">
+                                    <i class="fas fa-envelope-open text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-semibold">Détails du message</h3>
+                                    <p class="text-blue-100 text-sm">Consultation et réponse</p>
+                                </div>
+                            </div>
+                            <button onclick="closeModal()" class="text-white hover:text-gray-200 transition-colors p-2 hover:bg-white hover:bg-opacity-20 rounded-full">
+                                <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
                         
-                        <div class="flex h-[calc(90vh-80px)]">
+                        <div class="flex h-[calc(95vh-120px)]">
                             <!-- Partie gauche - Détails du message -->
-                            <div class="w-1/2 p-6 border-r bg-gray-50 overflow-y-auto">
-                                <div id="messageContent">
+                            <div class="w-2/5 bg-gray-50 border-r overflow-y-auto">
+                                <div class="p-6" id="messageContent">
                                     <!-- Contenu du message sera chargé ici -->
                                 </div>
                             </div>
                             
-                            <!-- Partie droite - Réponse -->
-                            <div class="w-1/2 p-6 flex flex-col">
-                                <div class="mb-4">
-                                    <h4 class="text-lg font-semibold text-gray-800 mb-2">
-                                        <i class="fas fa-reply mr-2 text-green-600"></i>
-                                        Répondre au message
-                                    </h4>
-                                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                                        <i class="fas fa-info-circle mr-2"></i>
-                                        En mode local, la réponse sera simulée et affichée dans l'historique.
-                                    </div>
+                            <!-- Partie droite - Interface de réponse -->
+                            <div class="w-3/5 flex flex-col">
+                                <!-- Onglets -->
+                                <div class="border-b bg-gray-50">
+                                    <nav class="flex">
+                                        <button onclick="switchTab('reply')" class="tab-button active flex items-center px-6 py-4 text-sm font-medium border-b-2 border-blue-600 text-blue-600">
+                                            <i class="fas fa-reply mr-2"></i>Répondre
+                                        </button>
+                                        <button onclick="switchTab('history')" class="tab-button flex items-center px-6 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                                            <i class="fas fa-history mr-2"></i>Historique <span id="historyTabBadge" class="ml-2 bg-blue-100 text-blue-600 text-xs rounded-full px-2 py-1 hidden">0</span>
+                                        </button>
+                                    </nav>
                                 </div>
                                 
-                                <form id="replyForm" class="flex-1 flex flex-col">
-                                    <input type="hidden" id="replyMessageId" name="message_id">
-                                    <input type="hidden" name="action" value="send_reply">
-                                    <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
-                                    
-                                    <div class="mb-4">
-                                        <label for="replySubject" class="block text-sm font-medium text-gray-700 mb-2">
-                                            Sujet de la réponse
-                                        </label>
-                                        <input type="text" id="replySubject" name="subject" 
-                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                               placeholder="Re: Votre message de contact">
-                                    </div>
-                                    
-                                    <div class="flex-1 mb-4">
-                                        <label for="replyMessage" class="block text-sm font-medium text-gray-700 mb-2">
-                                            Votre réponse
-                                        </label>
-                                        <textarea id="replyMessage" name="reply_message" 
-                                                  class="w-full h-full min-h-[200px] px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-none"
-                                                  placeholder="Bonjour,
+                                <!-- Contenu des onglets -->
+                                <div class="flex-1 flex flex-col">
+                                    <!-- Onglet Réponse -->
+                                    <div id="replyTab" class="tab-content flex-1 flex flex-col p-6">
+                                        <div class="mb-4">
+                                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-info-circle mr-2"></i>
+                                                    <span class="font-medium">Mode simulation</span>
+                                                </div>
+                                                <p class="mt-1">En environnement local, la réponse sera enregistrée et affichée dans l'historique.</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <form id="replyForm" class="flex-1 flex flex-col">
+                                            <input type="hidden" id="replyMessageId" name="message_id">
+                                            <input type="hidden" name="action" value="send_reply">
+                                            <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
+                                            
+                                            <div class="mb-4">
+                                                <label for="replySubject" class="block text-sm font-semibold text-gray-700 mb-2">
+                                                    <i class="fas fa-tag mr-1"></i>Sujet de la réponse
+                                                </label>
+                                                <input type="text" id="replySubject" name="subject" 
+                                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                                       placeholder="Re: Votre message de contact">
+                                            </div>
+                                            
+                                            <div class="flex-1 mb-4">
+                                                <label for="replyMessage" class="block text-sm font-semibold text-gray-700 mb-2">
+                                                    <i class="fas fa-comment mr-1"></i>Votre réponse
+                                                </label>
+                                                <textarea id="replyMessage" name="reply_message" 
+                                                          class="w-full h-full min-h-[250px] px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
+                                                          placeholder="Bonjour,
 
-Merci pour votre message. 
+Merci pour votre message.
 
 Cordialement,"></textarea>
+                                            </div>
+                                            
+                                            <div class="flex gap-3">
+                                                <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium flex items-center justify-center">
+                                                    <i class="fas fa-paper-plane mr-2"></i>Envoyer la réponse
+                                                </button>
+                                                <button type="button" onclick="saveReplyDraft()" class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center">
+                                                    <i class="fas fa-save mr-2"></i>Brouillon
+                                                </button>
+                                            </div>
+                                        </form>
                                     </div>
                                     
-                                    <div class="flex gap-3">
-                                        <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-200">
-                                            <i class="fas fa-paper-plane mr-2"></i>Envoyer la réponse
-                                        </button>
-                                        <button type="button" onclick="saveReplyDraft()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition duration-200">
-                                            <i class="fas fa-save mr-2"></i>Brouillon
-                                        </button>
-                                    </div>
-                                </form>
-                                
-                                <!-- Historique des réponses -->
-                                <div id="replyHistory" class="mt-6 pt-4 border-t hidden">
-                                    <h5 class="font-medium text-gray-700 mb-3">
-                                        <i class="fas fa-history mr-2"></i>Historique des réponses
-                                    </h5>
-                                    <div id="replyHistoryContent" class="space-y-3 max-h-32 overflow-y-auto">
-                                        <!-- Historique sera chargé ici -->
+                                    <!-- Onglet Historique -->
+                                    <div id="historyTab" class="tab-content hidden flex-1 p-6">
+                                        <div id="replyHistoryContent" class="space-y-4 max-h-full overflow-y-auto">
+                                            <div class="text-center text-gray-500 py-12">
+                                                <i class="fas fa-history text-4xl mb-4"></i>
+                                                <p>Aucun historique de réponse pour ce message</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3310,34 +3526,73 @@ Cordialement,"></textarea>
             if (message) {
                 const content = `
                     <div class="space-y-6">
-                        <div class="bg-white border border-gray-200 rounded-lg p-4">
-                            <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
-                                <i class="fas fa-user mr-2 text-blue-600"></i>
-                                Informations de contact
-                            </h4>
-                            <div class="space-y-2 text-sm">
-                                <p><span class="font-medium text-gray-700">Nom :</span> ${message.firstname} ${message.lastname}</p>
-                                <p><span class="font-medium text-gray-700">Email :</span> 
-                                   <a href="mailto:${message.email}" class="text-blue-600 hover:underline">${message.email}</a>
-                                </p>
-                                ${message.phone ? `<p><span class="font-medium text-gray-700">Téléphone :</span> 
-                                   <a href="tel:${message.phone}" class="text-blue-600 hover:underline">${message.phone}</a></p>` : ''}
-                                <p><span class="font-medium text-gray-700">Date :</span> ${new Date(message.created_at).toLocaleString('fr-FR')}</p>
-                                <p><span class="font-medium text-gray-700">IP :</span> ${message.ip_address}</p>
-                                <p><span class="font-medium text-gray-700">Statut :</span> 
-                                   <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${message.is_read ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                                       <i class="fas fa-${message.is_read ? 'check' : 'circle'} mr-1"></i>
-                                       ${message.is_read ? 'Lu' : 'Non lu'}
-                                   </span>
-                                </p>
+                        <!-- Carte d'information du contact -->
+                        <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6">
+                            <div class="flex items-center mb-4">
+                                <div class="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg mr-4">
+                                    ${message.firstname.charAt(0).toUpperCase()}${message.lastname.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h4 class="text-xl font-bold text-gray-900">${message.firstname} ${message.lastname}</h4>
+                                    <p class="text-gray-600 flex items-center">
+                                        <i class="fas fa-user-circle mr-2"></i>Contact client
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <div class="bg-white rounded-lg p-3 border border-gray-100">
+                                    <div class="flex items-center text-gray-600 mb-1">
+                                        <i class="fas fa-envelope mr-2 text-blue-500"></i>Email
+                                    </div>
+                                    <a href="mailto:${message.email}" class="text-blue-600 hover:underline font-medium">${message.email}</a>
+                                </div>
+                                
+                                ${message.phone ? `
+                                <div class="bg-white rounded-lg p-3 border border-gray-100">
+                                    <div class="flex items-center text-gray-600 mb-1">
+                                        <i class="fas fa-phone mr-2 text-green-500"></i>Téléphone
+                                    </div>
+                                    <a href="tel:${message.phone}" class="text-blue-600 hover:underline font-medium">${message.phone}</a>
+                                </div>
+                                ` : ''}
+                                
+                                <div class="bg-white rounded-lg p-3 border border-gray-100">
+                                    <div class="flex items-center text-gray-600 mb-1">
+                                        <i class="fas fa-calendar mr-2 text-purple-500"></i>Date de réception
+                                    </div>
+                                    <span class="font-medium">${new Date(message.created_at).toLocaleString('fr-FR')}</span>
+                                </div>
+                                
+                                <div class="bg-white rounded-lg p-3 border border-gray-100">
+                                    <div class="flex items-center text-gray-600 mb-1">
+                                        <i class="fas fa-globe mr-2 text-gray-500"></i>Adresse IP
+                                    </div>
+                                    <span class="font-medium font-mono text-xs">${message.ip_address}</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="bg-white border border-gray-200 rounded-lg p-4">
-                            <h4 class="font-semibold text-gray-900 mb-3 flex items-center">
-                                <i class="fas fa-comment mr-2 text-green-600"></i>
-                                Message reçu
-                            </h4>
-                            <div class="bg-gray-50 border rounded p-3 text-sm whitespace-pre-wrap">${message.message}</div>
+                        
+                        <!-- Message reçu -->
+                        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                            <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="font-semibold text-gray-900 flex items-center">
+                                        <i class="fas fa-comment-alt mr-2 text-green-600"></i>
+                                        Message reçu
+                                    </h4>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${message.is_read ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                            <i class="fas fa-${message.is_read ? 'check-circle' : 'circle'} mr-1"></i>
+                                            ${message.is_read ? 'Lu' : 'Non lu'}
+                                        </span>
+                                        <span class="text-xs text-gray-500">${message.message.length} caractères</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <div class="bg-gray-50 border-l-4 border-blue-400 rounded-r-lg p-4 text-gray-800 whitespace-pre-wrap leading-relaxed">${message.message}</div>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -3350,6 +3605,9 @@ Cordialement,"></textarea>
                 
                 // Charger l'historique des réponses
                 loadReplyHistory(messageId);
+                
+                // S'assurer que l'onglet réponse est actif
+                switchTab('reply');
                 
                 document.getElementById('messageModal').classList.remove('hidden');
                 document.getElementById('messageModal').classList.add('flex');
@@ -3373,6 +3631,19 @@ Cordialement,"></textarea>
         }
         
         function loadReplyHistory(messageId) {
+            const historyContent = document.getElementById('replyHistoryContent');
+            const historyTabBadge = document.getElementById('historyTabBadge');
+            
+            if (!historyContent) return;
+            
+            // Afficher un indicateur de chargement
+            historyContent.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-2xl mb-2"></i>
+                    <p class="text-gray-500">Chargement de l'historique...</p>
+                </div>
+            `;
+            
             fetch('', {
                 method: 'POST',
                 headers: {
@@ -3384,21 +3655,70 @@ Cordialement,"></textarea>
             .then(data => {
                 if (data.success && data.replies.length > 0) {
                     let historyHtml = '';
-                    data.replies.forEach(reply => {
+                    data.replies.forEach((reply, index) => {
                         historyHtml += `
-                            <div class="bg-gray-50 border rounded p-3 text-sm">
-                                <div class="font-medium text-gray-700 mb-1">${reply.subject}</div>
-                                <div class="text-gray-600 text-xs mb-2">${new Date(reply.sent_at).toLocaleString('fr-FR')}</div>
-                                <div class="text-gray-800">${reply.reply_message.substring(0, 100)}${reply.reply_message.length > 100 ? '...' : ''}</div>
+                            <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4 transition-all hover:shadow-md">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center">
+                                        <div class="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-semibold mr-3">
+                                            ${data.replies.length - index}
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-gray-900">${reply.subject}</h4>
+                                            <p class="text-sm text-gray-500 flex items-center">
+                                                <i class="fas fa-clock mr-1"></i>
+                                                ${new Date(reply.sent_at).toLocaleString('fr-FR')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span class="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
+                                        <i class="fas fa-check mr-1"></i>Envoyé
+                                    </span>
+                                </div>
+                                <div class="bg-white rounded-lg p-3 text-gray-800 border border-gray-100">
+                                    <div class="text-sm whitespace-pre-wrap">${reply.reply_message}</div>
+                                </div>
                             </div>
                         `;
                     });
-                    document.getElementById('replyHistoryContent').innerHTML = historyHtml;
-                    document.getElementById('replyHistory').classList.remove('hidden');
+                    
+                    historyContent.innerHTML = historyHtml;
+                    
+                    // Mettre à jour le badge de l'onglet historique
+                    if (historyTabBadge) {
+                        historyTabBadge.textContent = data.replies.length;
+                        historyTabBadge.classList.remove('hidden');
+                    }
+                } else {
+                    historyContent.innerHTML = `
+                        <div class="text-center text-gray-500 py-12">
+                            <div class="bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-history text-2xl"></i>
+                            </div>
+                            <h3 class="font-medium text-gray-900 mb-2">Aucun historique</h3>
+                            <p class="text-sm">Aucune réponse n'a encore été envoyée pour ce message.</p>
+                        </div>
+                    `;
+                    
+                    // Masquer le badge
+                    if (historyTabBadge) {
+                        historyTabBadge.classList.add('hidden');
+                    }
                 }
             })
             .catch(error => {
-                console.log('Aucun historique trouvé');
+                console.log('Erreur chargement historique:', error);
+                historyContent.innerHTML = `
+                    <div class="text-center text-red-500 py-12">
+                        <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                        <p>Erreur lors du chargement de l'historique</p>
+                    </div>
+                `;
+                
+                // Masquer le badge en cas d'erreur
+                if (historyTabBadge) {
+                    historyTabBadge.classList.add('hidden');
+                }
             });
         }
 
@@ -3536,33 +3856,17 @@ Cordialement,"></textarea>
                 if (data.success) {
                     showNotification(data.message);
                     
-                    // Ajouter à l'historique avec animation
-                    const historyContent = document.getElementById('replyHistoryContent');
-                    const newReply = document.createElement('div');
-                    newReply.className = 'bg-green-50 border border-green-200 rounded p-3 text-sm';
-                    newReply.style.opacity = '0';
-                    newReply.style.transform = 'translateY(-10px)';
-                    newReply.innerHTML = `
-                        <div class="font-medium text-green-700 mb-1">${form.subject.value}</div>
-                        <div class="text-green-600 text-xs mb-2">Envoyé le ${data.timestamp}</div>
-                        <div class="text-green-800">${form.reply_message.value.substring(0, 100)}${form.reply_message.value.length > 100 ? '...' : ''}</div>
-                    `;
+                    // Réinitialiser le formulaire
+                    form.reply_message.value = '';
                     
-                    historyContent.insertBefore(newReply, historyContent.firstChild);
-                    document.getElementById('replyHistory').classList.remove('hidden');
-                    
-                    // Animation d'apparition
+                    // Basculer vers l'onglet historique et recharger
+                    switchTab('history');
                     setTimeout(() => {
-                        newReply.style.transition = 'all 0.3s ease-out';
-                        newReply.style.opacity = '1';
-                        newReply.style.transform = 'translateY(0)';
-                    }, 10);
+                        loadReplyHistory(messageId);
+                    }, 100);
                     
                     // Mettre à jour le compteur de réponses dans le tableau principal
                     updateReplyCount(messageId);
-                    
-                    // Réinitialiser le formulaire
-                    form.reply_message.value = '';
                     
                 } else {
                     showNotification(data.error || 'Erreur lors de l\'envoi', 'error');
@@ -4137,6 +4441,341 @@ Cordialement,"></textarea>
                 setTimeout(checkForNewMessages, 1000);
             }
         });
+    </script>
+
+    <!-- Scripts JavaScript pour la gestion améliorée des messages -->
+    <script>
+        // Variables globales pour la sélection multiple
+        let selectedMessages = new Set();
+        
+        // Initialisation des événements pour la section messages
+        document.addEventListener('DOMContentLoaded', function() {
+            if (currentSection === 'messages') {
+                initializeMessageHandlers();
+            }
+        });
+        
+        function initializeMessageHandlers() {
+            // Gestion de la sélection multiple
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const headerCheckbox = document.getElementById('headerCheckbox');
+            const messageCheckboxes = document.querySelectorAll('.message-checkbox');
+            
+            // Checkbox "Tout sélectionner" dans la barre d'outils
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    const isChecked = this.checked;
+                    messageCheckboxes.forEach(checkbox => {
+                        checkbox.checked = isChecked;
+                        toggleMessageSelection(checkbox.value, isChecked);
+                    });
+                    if (headerCheckbox) {
+                        headerCheckbox.checked = isChecked;
+                    }
+                });
+            }
+            
+            // Checkbox dans l'en-tête du tableau
+            if (headerCheckbox) {
+                headerCheckbox.addEventListener('change', function() {
+                    const isChecked = this.checked;
+                    messageCheckboxes.forEach(checkbox => {
+                        checkbox.checked = isChecked;
+                        toggleMessageSelection(checkbox.value, isChecked);
+                    });
+                    if (selectAllCheckbox) {
+                        selectAllCheckbox.checked = isChecked;
+                    }
+                });
+            }
+            
+            // Checkboxes individuelles
+            messageCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    toggleMessageSelection(this.value, this.checked);
+                    updateSelectAllState();
+                });
+            });
+            
+            // Filtres et tri
+            const statusFilter = document.getElementById('statusFilter');
+            const sortBy = document.getElementById('sortBy');
+            
+            if (statusFilter) {
+                statusFilter.addEventListener('change', applyFilters);
+            }
+            
+            if (sortBy) {
+                sortBy.addEventListener('change', applySorting);
+            }
+        }
+        
+        function toggleMessageSelection(messageId, isSelected) {
+            if (isSelected) {
+                selectedMessages.add(messageId);
+            } else {
+                selectedMessages.delete(messageId);
+            }
+            updateBulkActions();
+        }
+        
+        function updateSelectAllState() {
+            const messageCheckboxes = document.querySelectorAll('.message-checkbox');
+            const checkedCheckboxes = document.querySelectorAll('.message-checkbox:checked');
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const headerCheckbox = document.getElementById('headerCheckbox');
+            
+            const allChecked = messageCheckboxes.length > 0 && checkedCheckboxes.length === messageCheckboxes.length;
+            const someChecked = checkedCheckboxes.length > 0;
+            
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = someChecked && !allChecked;
+            }
+            
+            if (headerCheckbox) {
+                headerCheckbox.checked = allChecked;
+                headerCheckbox.indeterminate = someChecked && !allChecked;
+            }
+        }
+        
+        function updateBulkActions() {
+            const bulkActions = document.getElementById('bulkActions');
+            const selectedCount = document.getElementById('selectedCount');
+            
+            if (selectedMessages.size > 0) {
+                bulkActions.style.opacity = '1';
+                selectedCount.textContent = `${selectedMessages.size} sélectionné${selectedMessages.size > 1 ? 's' : ''}`;
+            } else {
+                bulkActions.style.opacity = '0';
+                selectedCount.textContent = '';
+            }
+        }
+        
+        function markSelectedAsRead() {
+            if (selectedMessages.size === 0) {
+                showNotification('Aucun message sélectionné', 'error');
+                return;
+            }
+            
+            const messageIds = Array.from(selectedMessages);
+            
+            fetch('', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `action=mark_multiple_read&message_ids=${JSON.stringify(messageIds)}&csrf_token=<?= generateCSRFToken() ?>`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(data.message);
+                    
+                    // Mettre à jour visuellement les messages
+                    messageIds.forEach(messageId => {
+                        const row = document.querySelector(`tr[data-message-id="${messageId}"]`);
+                        if (row) {
+                            // Changer le statut visuel
+                            row.classList.remove('bg-blue-50', 'border-l-4', 'border-blue-400');
+                            row.classList.add('bg-white');
+                            row.setAttribute('data-status', 'read');
+                            
+                            // Mettre à jour le badge de statut
+                            const statusCell = row.querySelector('td:nth-child(5)');
+                            if (statusCell) {
+                                statusCell.innerHTML = `
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+                                        <i class="fas fa-check-circle mr-1"></i>
+                                        Lu
+                                    </span>
+                                `;
+                            }
+                            
+                            // Supprimer le point animé
+                            const nameCell = row.querySelector('td:nth-child(2)');
+                            const animatedDot = nameCell.querySelector('.animate-pulse');
+                            if (animatedDot) {
+                                animatedDot.remove();
+                            }
+                            
+                            // Supprimer le bouton "Marquer lu"
+                            const actionsCell = row.querySelector('td:nth-child(7)');
+                            const markReadButton = actionsCell.querySelector('button[onclick*="markAsRead"]');
+                            if (markReadButton) {
+                                markReadButton.remove();
+                            }
+                        }
+                    });
+                    
+                    // Réinitialiser la sélection
+                    clearSelection();
+                    
+                    // Mettre à jour les compteurs
+                    setTimeout(() => {
+                        updateUnreadCount();
+                        checkForNewMessages();
+                    }, 500);
+                    
+                } else {
+                    showNotification(data.error || 'Erreur lors de la mise à jour', 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Erreur de connexion', 'error');
+            });
+        }
+        
+        function deleteSelectedMessages() {
+            if (selectedMessages.size === 0) {
+                showNotification('Aucun message sélectionné', 'error');
+                return;
+            }
+            
+            const count = selectedMessages.size;
+            const messageText = count === 1 ? 'ce message' : `ces ${count} messages`;
+            
+            if (!confirm(`Êtes-vous sûr de vouloir supprimer ${messageText} ? Cette action est irréversible.`)) {
+                return;
+            }
+            
+            const messageIds = Array.from(selectedMessages);
+            
+            fetch('', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `action=delete_multiple_messages&message_ids=${JSON.stringify(messageIds)}&csrf_token=<?= generateCSRFToken() ?>`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(data.message);
+                    
+                    // Supprimer visuellement les messages avec animation
+                    messageIds.forEach((messageId, index) => {
+                        const row = document.querySelector(`tr[data-message-id="${messageId}"]`);
+                        if (row) {
+                            setTimeout(() => {
+                                row.style.transition = 'all 0.3s ease-out';
+                                row.style.opacity = '0';
+                                row.style.transform = 'translateX(-100px)';
+                                
+                                setTimeout(() => {
+                                    row.remove();
+                                    
+                                    // Vérifier s'il reste des messages après suppression
+                                    const tbody = document.getElementById('messagesTableBody');
+                                    if (tbody && tbody.children.length === 0) {
+                                        refreshMessages();
+                                    }
+                                }, 300);
+                            }, index * 100); // Décalage pour un effet en cascade
+                        }
+                    });
+                    
+                    // Réinitialiser la sélection
+                    clearSelection();
+                    
+                    // Mettre à jour les compteurs
+                    updateUnreadCount();
+                    
+                    // Mettre à jour le compteur total
+                    const totalCount = document.getElementById('totalMessagesCount');
+                    if (totalCount) {
+                        const currentCount = parseInt(totalCount.textContent);
+                        totalCount.textContent = Math.max(0, currentCount - data.deleted);
+                    }
+                    
+                } else {
+                    showNotification(data.error || 'Erreur lors de la suppression', 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('Erreur de connexion', 'error');
+            });
+        }
+        
+        function clearSelection() {
+            selectedMessages.clear();
+            
+            // Décocher toutes les checkboxes
+            document.querySelectorAll('.message-checkbox, #selectAll, #headerCheckbox').forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.indeterminate = false;
+            });
+            
+            updateBulkActions();
+        }
+        
+        function applyFilters() {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const rows = document.querySelectorAll('#messagesTableBody tr');
+            
+            rows.forEach(row => {
+                const rowStatus = row.getAttribute('data-status');
+                const shouldShow = !statusFilter || rowStatus === statusFilter;
+                
+                row.style.display = shouldShow ? '' : 'none';
+            });
+        }
+        
+        function applySorting() {
+            const sortBy = document.getElementById('sortBy').value;
+            const tbody = document.getElementById('messagesTableBody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            rows.sort((a, b) => {
+                switch (sortBy) {
+                    case 'newest':
+                        return parseInt(b.getAttribute('data-date')) - parseInt(a.getAttribute('data-date'));
+                    case 'oldest':
+                        return parseInt(a.getAttribute('data-date')) - parseInt(b.getAttribute('data-date'));
+                    case 'name':
+                        return a.getAttribute('data-name').localeCompare(b.getAttribute('data-name'));
+                    default:
+                        return 0;
+                }
+            });
+            
+            // Réorganiser les lignes
+            rows.forEach(row => tbody.appendChild(row));
+        }
+        
+        function switchTab(tabName) {
+            // Masquer tous les onglets
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Déactiver tous les boutons d'onglet
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active', 'border-blue-600', 'text-blue-600');
+                button.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            // Activer l'onglet sélectionné
+            const activeTab = document.getElementById(tabName + 'Tab');
+            const activeButton = document.querySelector(`button[onclick="switchTab('${tabName}')"]`);
+            
+            if (activeTab) {
+                activeTab.classList.remove('hidden');
+            }
+            
+            if (activeButton) {
+                activeButton.classList.add('active', 'border-blue-600', 'text-blue-600');
+                activeButton.classList.remove('border-transparent', 'text-gray-500');
+            }
+            
+            // Charger l'historique si on bascule sur l'onglet historique
+            if (tabName === 'history') {
+                const messageId = document.getElementById('replyMessageId').value;
+                if (messageId) {
+                    loadReplyHistory(messageId);
+                }
+            }
+        }
     </script>
 
     <!-- Modale pour le sélecteur d'icônes -->
