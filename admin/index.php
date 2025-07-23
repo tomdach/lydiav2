@@ -3255,9 +3255,17 @@ Cordialement,"></textarea>
                 document.getElementById('messageModal').classList.remove('hidden');
                 document.getElementById('messageModal').classList.add('flex');
                 
-                // Marquer comme lu automatiquement
+                // Marquer comme lu automatiquement ET mettre à jour le compteur immédiatement
                 if (!message.is_read) {
-                    markAsRead(messageId, false);
+                    // Mettre à jour visuellement le compteur AVANT l'appel AJAX pour une réactivité immédiate
+                    const currentCount = parseInt(document.querySelector('span.bg-red-500')?.textContent || '0');
+                    if (currentCount > 0) {
+                        updateUnreadCountDisplay(currentCount - 1);
+                        lastUnreadCount = currentCount - 1; // Mettre à jour la variable globale
+                    }
+                    
+                    // Marquer comme lu côté serveur (sans mettre à jour le compteur car déjà fait)
+                    markAsRead(messageId, false, false);
                 }
             }
         }
@@ -3297,7 +3305,7 @@ Cordialement,"></textarea>
             document.getElementById('messageModal').classList.remove('flex');
         }
 
-        function markAsRead(messageId, showAlert = true) {
+        function markAsRead(messageId, showAlert = true, updateCounter = true) {
             const row = document.querySelector(`tr[data-message-id="${messageId}"]`);
             
             console.log('Marquage comme lu pour message:', messageId); // Debug
@@ -3345,12 +3353,14 @@ Cordialement,"></textarea>
                         row.style.animation = 'rowUpdate 0.5s ease-out';
                     }
                     
-                    // Mettre à jour les compteurs
-                    setTimeout(() => {
-                        updateUnreadCount();
-                        // Forcer la mise à jour immédiate
-                        checkForNewMessages();
-                    }, 500);
+                    // Mettre à jour les compteurs seulement si demandé
+                    if (updateCounter) {
+                        setTimeout(() => {
+                            updateUnreadCount();
+                            // Forcer la mise à jour immédiate
+                            checkForNewMessages();
+                        }, 500);
+                    }
                     
                 } else {
                     alert(data.error || 'Erreur lors de la mise à jour');
