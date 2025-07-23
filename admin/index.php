@@ -1413,6 +1413,10 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
 
             <?php elseif ($currentSection === 'messages'): ?>
                 <!-- Section Messages Pro -->
+                <?php
+                $messages = getContactMessages();
+                ?>
+                
                 <div class="mb-8">
                     <div class="flex items-center justify-between">
                         <div>
@@ -1433,15 +1437,11 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
                             </button>
                             <div class="bg-white border border-gray-200 rounded-lg px-4 py-2 flex items-center space-x-2">
                                 <span class="text-sm text-gray-600">Total:</span>
-                                <span class="font-semibold text-gray-900" id="totalMessagesCount"><?= count($messages) ?></span>
+                                <span class="font-semibold text-gray-900" id="totalMessagesCount"><?= count($messages ?? []) ?></span>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <?php
-                $messages = getContactMessages();
-                ?>
 
                 <!-- Interface de gestion avancée -->
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden" id="messagesContainer">
