@@ -177,6 +177,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true, 'count' => $count]);
             exit;
             
+        case 'get_recent_messages':
+            $messages = getContactMessages(5); // Récupérer les 5 derniers messages
+            echo json_encode(['success' => true, 'messages' => $messages]);
+            exit;
+            
         case 'delete_message':
             $messageId = intval($_POST['message_id'] ?? 0);
             
@@ -665,6 +670,7 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
             border: 1px solid #e5e7eb;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             transition: all 0.3s ease;
+            position: relative;
         }
         .stats-card:hover {
             transform: translateY(-2px);
@@ -680,6 +686,37 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
             color: #6b7280;
             font-size: 14px;
             font-weight: 500;
+        }
+        
+        /* Styles pour les messages du dashboard */
+        .message-preview {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+
+        .message-preview:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+        }
+
+        .message-preview.unread {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-left: 4px solid #3b82f6;
+        }
+
+        .message-indicator {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
         }
         .notification {
             position: fixed;
@@ -1065,6 +1102,67 @@ if ($currentSection !== 'dashboard' && $currentSection !== 'settings' && $curren
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- Messages récents -->
+                    <div class="editor-section">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center justify-between">
+                            <div class="flex items-center">
+                                <i class="fas fa-envelope text-blue-500 mr-2"></i>
+                                Messages récents
+                                <?php if ($unreadCount > 0): ?>
+                                <span id="dashboardUnreadBadge" class="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1 animate-pulse"><?= $unreadCount ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <a href="?section=messages" class="text-sm text-blue-600 hover:text-blue-800 transition-colors duration-200">
+                                Voir tout →
+                            </a>
+                        </h3>
+                        <div id="dashboardMessages" class="space-y-3">
+                            <?php
+                            $recentMessages = getContactMessages(5); // Récupérer les 5 derniers messages
+                            if (empty($recentMessages)): ?>
+                                <div class="text-center py-8 text-gray-500">
+                                    <i class="fas fa-inbox text-3xl mb-2"></i>
+                                    <p>Aucun message pour le moment</p>
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($recentMessages as $message): ?>
+                                <div class="message-preview <?= $message['is_read'] ? 'opacity-60' : 'bg-blue-50 border-l-4 border-blue-500' ?> p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all duration-200" 
+                                     onclick="viewMessage(<?= $message['id'] ?>)">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <?php if (!$message['is_read']): ?>
+                                                <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                <?php endif; ?>
+                                                <h4 class="font-semibold text-gray-800"><?= htmlspecialchars($message['firstname'] . ' ' . $message['lastname']) ?></h4>
+                                                <span class="text-xs text-gray-500"><?= date('d/m H:i', strtotime($message['created_at'])) ?></span>
+                                            </div>
+                                            <p class="text-sm text-gray-600 truncate"><?= htmlspecialchars(substr($message['message'], 0, 80)) ?>...</p>
+                                        </div>
+                                        <div class="ml-2 flex flex-col gap-1">
+                                            <?php if (!$message['is_read']): ?>
+                                            <button onclick="event.stopPropagation(); markAsRead(<?= $message['id'] ?>, false)" 
+                                                    class="text-green-600 hover:text-green-800 text-xs" title="Marquer comme lu">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <?php endif; ?>
+                                            <button onclick="event.stopPropagation(); viewMessage(<?= $message['id'] ?>)" 
+                                                    class="text-blue-600 hover:text-blue-800 text-xs" title="Voir le message">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                                <div class="text-center pt-3">
+                                    <a href="?section=messages" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        Voir tous les messages →
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
                     <!-- Actions rapides -->
                     <div class="editor-section">
                         <h3 class="text-xl font-semibold mb-4 flex items-center">
@@ -3266,6 +3364,9 @@ Cordialement,"></textarea>
                     
                     // Marquer comme lu côté serveur (sans mettre à jour le compteur car déjà fait)
                     markAsRead(messageId, false, false);
+                    
+                    // Rafraîchir les messages du dashboard si on est dessus
+                    setTimeout(() => refreshDashboardMessages(), 500);
                 }
             }
         }
@@ -3387,6 +3488,9 @@ Cordialement,"></textarea>
                     // Mettre à jour la variable globale pour éviter les doublons
                     lastUnreadCount = data.count;
                     console.log('Compteur mis à jour:', data.count);
+                    
+                    // Rafraîchir les messages du dashboard
+                    refreshDashboardMessages();
                 }
             })
             .catch(error => {
@@ -3673,6 +3777,10 @@ Cordialement,"></textarea>
                         
                         // Mettre à jour lastUnreadCount IMMÉDIATEMENT pour éviter les doublons
                         lastUnreadCount = newCount;
+                    } else if (newCount !== lastUnreadCount) {
+                        // Synchroniser avec le serveur même si le count a diminué
+                        lastUnreadCount = newCount;
+                        refreshDashboardMessages();
                     }
                     
                     // Si on est sur la page des messages, actualiser la liste
@@ -3726,6 +3834,25 @@ Cordialement,"></textarea>
             if (dashboardCount) {
                 dashboardCount.textContent = count;
                 console.log('Dashboard mis à jour:', count); // Debug
+            }
+            
+            // Badge dans le titre de la section messages récents
+            const dashboardBadge = document.getElementById('dashboardUnreadBadge');
+            if (count > 0) {
+                if (dashboardBadge) {
+                    dashboardBadge.textContent = count;
+                    dashboardBadge.style.display = 'inline-block';
+                } else {
+                    // Créer le badge s'il n'existe pas
+                    const messagesTitle = document.querySelector('.editor-section h3 .flex.items-center');
+                    if (messagesTitle) {
+                        messagesTitle.insertAdjacentHTML('beforeend', 
+                            `<span id="dashboardUnreadBadge" class="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1 animate-pulse">${count}</span>`
+                        );
+                    }
+                }
+            } else if (dashboardBadge) {
+                dashboardBadge.style.display = 'none';
             }
             
             // Mettre à jour aussi le point clignotant dans le dashboard
@@ -3789,27 +3916,98 @@ Cordialement,"></textarea>
 
         // Actualiser la section messages récents du dashboard
         function refreshDashboardMessages() {
-            if (window.location.href.includes('section=dashboard') || !window.location.href.includes('section=')) {
-                fetch('', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `action=get_recent_messages&csrf_token=<?= generateCSRFToken() ?>`
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const container = document.getElementById('dashboardRecentMessages');
-                        if (container && data.html) {
-                            container.innerHTML = data.html;
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.log('Erreur actualisation messages dashboard:', error);
-                });
+            const dashboardMessages = document.getElementById('dashboardMessages');
+            if (!dashboardMessages) return; // Pas sur le dashboard
+            
+            fetch('', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `action=get_recent_messages&csrf_token=<?= generateCSRFToken() ?>`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.messages) {
+                    updateDashboardMessagesHTML(data.messages);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors du rafraîchissement des messages:', error);
+            });
+        }
+
+        // Mettre à jour le HTML des messages du dashboard
+        function updateDashboardMessagesHTML(messages) {
+            const dashboardMessages = document.getElementById('dashboardMessages');
+            if (!dashboardMessages) return;
+
+            if (messages.length === 0) {
+                dashboardMessages.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-inbox text-3xl mb-2"></i>
+                        <p>Aucun message pour le moment</p>
+                    </div>
+                `;
+                return;
             }
+
+            let html = '';
+            messages.forEach(message => {
+                const isUnread = message.is_read == 0;
+                const date = new Date(message.created_at);
+                const formattedDate = date.toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                html += `
+                    <div class="message-preview ${isUnread ? 'unread bg-blue-50 border-l-4 border-blue-500' : 'opacity-60'} p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all duration-200" 
+                         onclick="viewMessage(${message.id})">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    ${isUnread ? '<span class="w-2 h-2 bg-blue-500 rounded-full message-indicator"></span>' : ''}
+                                    <h4 class="font-semibold text-gray-800">${escapeHtml(message.firstname + ' ' + message.lastname)}</h4>
+                                    <span class="text-xs text-gray-500">${formattedDate}</span>
+                                </div>
+                                <p class="text-sm text-gray-600 truncate">${escapeHtml(message.message.substring(0, 80))}...</p>
+                            </div>
+                            <div class="ml-2 flex flex-col gap-1">
+                                ${isUnread ? `
+                                    <button onclick="event.stopPropagation(); markAsRead(${message.id}, false)" 
+                                            class="text-green-600 hover:text-green-800 text-xs transition-colors duration-200" title="Marquer comme lu">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                ` : ''}
+                                <button onclick="event.stopPropagation(); viewMessage(${message.id})" 
+                                        class="text-blue-600 hover:text-blue-800 text-xs transition-colors duration-200" title="Voir le message">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                <div class="text-center pt-3">
+                    <a href="?section=messages" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                        Voir tous les messages →
+                    </a>
+                </div>
+            `;
+
+            dashboardMessages.innerHTML = html;
+        }
+
+        // Fonction utilitaire pour échapper le HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Démarrer l'actualisation automatique
